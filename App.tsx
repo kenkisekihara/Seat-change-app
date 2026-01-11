@@ -1,31 +1,28 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { 
   Shuffle, 
   ArrowLeftRight, 
-  Download, 
   FileSpreadsheet, 
   FileText, 
   Upload, 
   RefreshCcw,
-  Sparkles,
   Info,
-  FileDown
+  FileDown,
+  Lock,
+  Ban
 } from 'lucide-react';
 import { Student, Seat, Gender } from './types';
 import { ROWS, COLS, DEFAULT_STUDENTS } from './constants';
 import SeatCard from './components/SeatCard';
-import { analyzeSeating } from './services/geminiService';
 
 const App: React.FC = () => {
   const [students, setStudents] = useState<Student[]>(DEFAULT_STUDENTS);
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
-  const [aiAdvice, setAiAdvice] = useState<string>("");
-  const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [swapIds, setSwapIds] = useState({ id1: '', id2: '' });
 
   // 初期配置
@@ -37,7 +34,9 @@ const App: React.FC = () => {
         newSeats.push({
           row: r,
           col: c,
-          student: studentList[studentIndex] || null
+          student: studentList[studentIndex] || null,
+          isLocked: false,
+          isUnusable: false
         });
         studentIndex++;
       }
@@ -49,20 +48,90 @@ const App: React.FC = () => {
     initializeSeats(students);
   }, [initializeSeats]);
 
-  // シャッフル
+  // シャッフル（固定された座席と使用不可な座席を考慮）
   const handleShuffle = () => {
-    const shuffled = [...students].sort(() => Math.random() - 0.5);
-    initializeSeats(shuffled);
+    // 1. 固定されていない、かつ使用可能な座席のインデックスを取得
+    const shufflableIndices = seats.reduce((acc, seat, idx) => {
+      if (!seat.isLocked && !seat.isUnusable) acc.push(idx);
+      return acc;
+    }, [] as number[]);
+
+    // 2. シャッフル対象となる生徒（固定されていない座席に現在いる生徒）を取得
+    const studentsToShuffle = seats
+      .filter((_, idx) => shufflableIndices.includes(idx))
+      .map(seat => seat.student)
+      .filter((s): s is Student => s !== null);
+
+    if (shufflableIndices.length < studentsToShuffle.length) {
+      alert("使用可能な座席数が生徒数より不足しています。使用不可設定を解除してください。");
+      return;
+    }
+
+    // 3. 空席も含めてシャッフル（座席数に合わせてnullで埋める）
+    const shufflePool: (Student | null)[] = [...studentsToShuffle];
+    while (shufflePool.length < shufflableIndices.length) {
+      shufflePool.push(null);
+    }
+    
+    const shuffledPool = shufflePool.sort(() => Math.random() - 0.5);
+
+    // 4. 新しい状態を適用
+    const newSeats = [...seats];
+    shufflableIndices.forEach((seatIdx, i) => {
+      newSeats[seatIdx].student = shuffledPool[i];
+    });
+
+    setSeats(newSeats);
     setSelectedSeatIndex(null);
+  };
+
+  // 座席の固定切り替え
+  const handleToggleLock = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (seats[index].isUnusable) return;
+
+    const newSeats = [...seats];
+    newSeats[index].isLocked = !newSeats[index].isLocked;
+    setSeats(newSeats);
+    
+    if (selectedSeatIndex === index) {
+      setSelectedSeatIndex(null);
+    }
+  };
+
+  // 使用不可（空席指定）の切り替え
+  const handleToggleUnusable = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSeats = [...seats];
+    const targetSeat = newSeats[index];
+    
+    // 使用不可にする場合、固定を解除
+    if (!targetSeat.isUnusable) {
+      targetSeat.isLocked = false;
+      // もし生徒がいたら、一旦退避（後で再配置するか、シンプルに消す。ここではシンプルに空ける）
+      targetSeat.student = null;
+    }
+    
+    targetSeat.isUnusable = !targetSeat.isUnusable;
+    setSeats(newSeats);
+
+    if (selectedSeatIndex === index) {
+      setSelectedSeatIndex(null);
+    }
   };
 
   // 指定クリックでの選択/入れ替え
   const handleSeatClick = (index: number) => {
+    // 固定されている、または使用不可な座席は選択/入れ替え対象外
+    if (seats[index].isLocked || seats[index].isUnusable) {
+      return;
+    }
+
     if (selectedSeatIndex === null) {
-      if (seats[index].student) {
-        setSelectedSeatIndex(index);
-      }
+      // 1人目の選択
+      setSelectedSeatIndex(index);
     } else {
+      // 2人目の選択（入れ替え実行）
       const newSeats = [...seats];
       const temp = newSeats[selectedSeatIndex].student;
       newSeats[selectedSeatIndex].student = newSeats[index].student;
@@ -85,6 +154,11 @@ const App: React.FC = () => {
       return;
     }
 
+    if (seats[idx1].isLocked || seats[idx2].isLocked || seats[idx1].isUnusable || seats[idx2].isUnusable) {
+      alert("固定または使用不可に設定されている座席が含まれています。設定を解除してから入れ替えてください。");
+      return;
+    }
+
     const newSeats = [...seats];
     const temp = newSeats[idx1].student;
     newSeats[idx1].student = newSeats[idx2].student;
@@ -93,12 +167,11 @@ const App: React.FC = () => {
     setSwapIds({ id1: '', id2: '' });
   };
 
-  // ひな形ダウンロード機能
+  // ひな形ダウンロード
   const downloadTemplate = () => {
     const templateData = [
       { "学籍番号": "1001", "名前": "佐藤 健一", "選択科目": "物理", "性別": "男" },
-      { "学籍番号": "1002", "名前": "田中 美咲", "選択科目": "生物", "性別": "女" },
-      { "学籍番号": "1003", "名前": "高橋 翔", "選択科目": "化学", "性別": "男" }
+      { "学籍番号": "1002", "名前": "田中 美咲", "選択科目": "生物", "性別": "女" }
     ];
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
@@ -140,7 +213,7 @@ const App: React.FC = () => {
       const rowData: any = {};
       for (let c = 0; c < COLS; c++) {
         const seat = seats.find(s => s.row === r && s.col === c);
-        rowData[`列${c + 1}`] = seat?.student ? `${seat.student.name} (${seat.student.id})` : "空席";
+        rowData[`列${c + 1}`] = seat?.isUnusable ? "【使用不可】" : (seat?.student ? `${seat.student.name} (${seat.student.id})` : "空席");
       }
       exportData.push(rowData);
     }
@@ -160,7 +233,11 @@ const App: React.FC = () => {
       const rowArr = [];
       for (let c = 0; c < COLS; c++) {
         const seat = seats.find(s => s.row === r && s.col === c);
-        rowArr.push(seat?.student ? `${seat.student.name}\n(${seat.student.id})` : "空席");
+        if (seat?.isUnusable) {
+          rowArr.push("---");
+        } else {
+          rowArr.push(seat?.student ? `${seat.student.name}\n(${seat.student.id})` : "空席");
+        }
       }
       tableData.push(rowArr);
     }
@@ -173,13 +250,6 @@ const App: React.FC = () => {
     });
     
     doc.save("座席表.pdf");
-  };
-
-  const fetchAiAdvice = async () => {
-    setIsLoadingAi(true);
-    const advice = await analyzeSeating(students);
-    setAiAdvice(advice);
-    setIsLoadingAi(false);
   };
 
   return (
@@ -222,9 +292,6 @@ const App: React.FC = () => {
                 <FileDown size={14} />
                 ひな形をダウンロード
               </button>
-              <p className="text-[10px] text-slate-400 mb-4 bg-slate-50 p-2 rounded border border-slate-100">
-                ※「学籍番号」「名前」「選択科目」「性別」のカラム名が必要です。
-              </p>
             </div>
             <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
               <div className="flex flex-col items-center justify-center pt-2 pb-2">
@@ -243,14 +310,14 @@ const App: React.FC = () => {
             <div className="space-y-3">
               <input 
                 type="text" 
-                placeholder="学籍番号1 (例: 1001)" 
+                placeholder="学籍番号1" 
                 value={swapIds.id1}
                 onChange={(e) => setSwapIds({...swapIds, id1: e.target.value})}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
               />
               <input 
                 type="text" 
-                placeholder="学籍番号2 (例: 1002)" 
+                placeholder="学籍番号2" 
                 value={swapIds.id2}
                 onChange={(e) => setSwapIds({...swapIds, id2: e.target.value})}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
@@ -262,26 +329,6 @@ const App: React.FC = () => {
                 入れ替え実行
               </button>
             </div>
-          </section>
-
-          {/* AI Advice */}
-          <section className="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 rounded-xl text-white shadow-md">
-            <h2 className="text-sm font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Sparkles size={16} /> AI配置アドバイス
-            </h2>
-            <div className="bg-white/10 rounded-lg p-3 text-sm min-h-[60px] mb-4">
-              {isLoadingAi ? (
-                <div className="animate-pulse flex items-center justify-center h-full">分析中...</div>
-              ) : (
-                aiAdvice || "現在の配置バランス（男女比・選択科目）についてAIが分析します。"
-              )}
-            </div>
-            <button 
-              onClick={fetchAiAdvice}
-              className="w-full bg-white text-indigo-600 py-2 rounded-md text-sm font-bold hover:bg-indigo-50 transition-colors shadow-sm"
-            >
-              アドバイスを取得
-            </button>
           </section>
         </div>
 
@@ -302,18 +349,35 @@ const App: React.FC = () => {
                   row={seat.row}
                   col={seat.col}
                   isSelected={selectedSeatIndex === index}
+                  isLocked={seat.isLocked}
+                  isUnusable={seat.isUnusable}
                   onClick={() => handleSeatClick(index)}
+                  onToggleLock={(e) => handleToggleLock(index, e)}
+                  onToggleUnusable={(e) => handleToggleUnusable(index, e)}
                 />
               ))}
             </div>
 
-            <div className="mt-8 flex items-center justify-between text-slate-400 text-xs italic">
-              <div className="flex items-center gap-1">
-                <Info size={14} />
-                座席をクリックして2人を選択すると入れ替えができます。
+            <div className="mt-8 flex flex-col gap-3">
+              <div className="flex items-center justify-between text-slate-400 text-xs italic">
+                <div className="flex items-center gap-1">
+                  <Info size={14} />
+                  座席をクリックして2人を選択すると入れ替えができます。
+                </div>
+                <div>
+                  生徒数: {students.length}名 / 座席数: {ROWS * COLS}
+                </div>
               </div>
-              <div>
-                生徒数: {students.length}名 / 座席数: {ROWS * COLS}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-2 p-2 bg-indigo-50 rounded-lg text-[11px] text-indigo-600 border border-indigo-100">
+                  <Lock size={14} />
+                  <span><strong>固定:</strong> 右上のカギで固定すると、シャッフル時に場所が変わりません。</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg text-[11px] text-red-600 border border-red-100">
+                  <Ban size={14} />
+                  <span><strong>空席指定:</strong> 禁止マークで座席を使用不可（空席）に設定できます。</span>
+                </div>
               </div>
             </div>
           </div>

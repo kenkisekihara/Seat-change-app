@@ -12,6 +12,8 @@ export interface Seat {
   row: number;
   col: number;
   student: Student | null;
+  isLocked: boolean; // 座席固定フラグ
+  isUnusable: boolean; // 使用不可フラグ（空席指定）
 }
 
 export interface ArrangementConfig {

@@ -1,5 +1,5 @@
 {
-  "name": "席替えアプリ",
-  "description": "Googleスプレッドシートのデータを活用し、6x7の座席表を自動生成・調整・エクスポートできる高性能な席替えアプリケーションです。",
+  "name": "スマート席替え Pro for Streamlit",
+  "description": "Python/StreamlitとGemini APIを活用した、高度な座席管理・配置最適化システムです。",
   "requestFramePermissions": []
 }

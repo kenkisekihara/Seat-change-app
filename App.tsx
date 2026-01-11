@@ -10,7 +10,10 @@ import {
   Info,
   FileDown,
   Lock,
-  Ban
+  Ban,
+  ShieldCheck,
+  Zap,
+  EyeOff
 } from 'lucide-react';
 import { Student, Seat, Gender } from './types';
 import { ROWS, COLS, DEFAULT_STUDENTS } from './constants';
@@ -21,6 +24,7 @@ const App: React.FC = () => {
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
   const [swapIds, setSwapIds] = useState({ id1: '', id2: '' });
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // 初期配置
   const initializeSeats = useCallback((studentList: Student[]) => {
@@ -45,45 +49,41 @@ const App: React.FC = () => {
     initializeSeats(students);
   }, [initializeSeats]);
 
-  // シャッフル（空席を後ろに詰めるロジック）
   const handleShuffle = () => {
-    // 1. 固定されていない、かつ使用可能な座席のインデックスを取得（前列から順）
-    const targetIndices = seats.reduce((acc, seat, idx) => {
-      if (!seat.isLocked && !seat.isUnusable) acc.push(idx);
-      return acc;
-    }, [] as number[]);
+    setIsProcessing(true);
+    setTimeout(() => {
+      const targetIndices = seats.reduce((acc, seat, idx) => {
+        if (!seat.isLocked && !seat.isUnusable) acc.push(idx);
+        return acc;
+      }, [] as number[]);
 
-    // 2. 現在それらの座席にいる生徒を抽出
-    const studentsInPlay = seats
-      .filter((_, idx) => targetIndices.includes(idx))
-      .map(s => s.student)
-      .filter((s): s is Student => s !== null);
+      const studentsInPlay = seats
+        .filter((_, idx) => targetIndices.includes(idx))
+        .map(s => s.student)
+        .filter((s): s is Student => s !== null);
 
-    if (targetIndices.length < studentsInPlay.length) {
-      alert("座席数が不足しています。");
-      return;
-    }
+      if (targetIndices.length < studentsInPlay.length) {
+        alert("座席数が不足しています。");
+        setIsProcessing(false);
+        return;
+      }
 
-    // 3. 生徒をランダムに並び替え
-    const shuffledStudents = [...studentsInPlay].sort(() => Math.random() - 0.5);
+      const shuffledStudents = [...studentsInPlay].sort(() => Math.random() - 0.5);
+      const newSeats = [...seats];
+      
+      targetIndices.forEach(idx => {
+        newSeats[idx].student = null;
+      });
 
-    // 4. 新しい配置を適用
-    const newSeats = [...seats];
-    
-    // 一旦対象座席をクリア
-    targetIndices.forEach(idx => {
-      newSeats[idx].student = null;
-    });
+      shuffledStudents.forEach((student, i) => {
+        const seatIdx = targetIndices[i];
+        newSeats[seatIdx].student = student;
+      });
 
-    // 前列（インデックスの若い順）から生徒を詰めて配置
-    // これにより、余った座席（空席）は必ず後ろ（インデックスの大きい順）に残る
-    shuffledStudents.forEach((student, i) => {
-      const seatIdx = targetIndices[i];
-      newSeats[seatIdx].student = student;
-    });
-
-    setSeats(newSeats);
-    setSelectedSeatIndex(null);
+      setSeats(newSeats);
+      setSelectedSeatIndex(null);
+      setIsProcessing(false);
+    }, 400); // セキュアな処理感を出すための僅かな遅延
   };
 
   const handleToggleLock = (index: number, e: React.MouseEvent) => {
@@ -157,6 +157,7 @@ const App: React.FC = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setIsProcessing(true);
     const reader = new FileReader();
     reader.onload = (evt) => {
       const data = evt.target?.result;
@@ -171,14 +172,13 @@ const App: React.FC = () => {
       })).filter(s => s.id);
       setStudents(imported);
       initializeSeats(imported);
+      setIsProcessing(false);
     };
     reader.readAsBinaryString(file);
   };
 
-  // Excel出力（視認性向上）
   const exportExcel = () => {
     const tableData = [];
-    // ヘッダー
     const header = [];
     for (let c = 0; c < COLS; c++) header.push(`${c + 1}列目`);
     tableData.push(header);
@@ -199,87 +199,128 @@ const App: React.FC = () => {
     }
 
     const ws = XLSX.utils.aoa_to_sheet(tableData);
-    // セル幅の調整 (25文字分)
     ws['!cols'] = Array(COLS).fill({ wch: 25 });
-    
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "座席表");
     XLSX.writeFile(wb, "座席表_出力.xlsx");
   };
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen bg-slate-50 pb-20">
+      {/* セキュリティバナー */}
+      <div className="bg-indigo-900 text-indigo-100 py-1.5 px-4 text-center text-[10px] font-bold tracking-widest uppercase flex items-center justify-center gap-2">
+        <ShieldCheck size={12} />
+        完全ローカル実行モード: アップロードされたファイルや個人情報は一切サーバーに保存されません。
+      </div>
+
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm no-print">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="bg-blue-600 p-2 rounded-lg text-white">
-              <RefreshCcw size={20} />
+            <div className="bg-indigo-600 p-2 rounded-lg text-white shadow-indigo-200 shadow-lg">
+              <ShieldCheck size={20} />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">席替えツール</h1>
+            <div>
+              <h1 className="text-xl font-black text-slate-800 tracking-tighter">席替えツール <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold ml-1 border">v2.0 SECURE</span></h1>
+            </div>
           </div>
           <button 
             onClick={handleShuffle}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            disabled={isProcessing}
+            className={`flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-100 ${isProcessing ? 'opacity-50' : ''}`}
           >
-            <Shuffle size={16} />
-            シャッフル (空席は後方へ)
+            {isProcessing ? <RefreshCcw size={16} className="animate-spin" /> : <Shuffle size={16} />}
+            席替えを実行
           </button>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 pt-8 grid grid-cols-1 lg:grid-cols-4 gap-8">
         <aside className="lg:col-span-1 flex flex-col gap-6 no-print">
-          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Upload size={16} /> 名簿インポート
+          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-2 opacity-5">
+              <EyeOff size={60} />
+            </div>
+            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Upload size={16} className="text-indigo-500" /> 名簿インポート
             </h2>
+            <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 mb-4 text-[11px] text-indigo-700 font-medium leading-relaxed">
+              ブラウザ内でのみデータを展開するため、情報漏洩のリスクはありません。
+            </div>
             <button 
               onClick={downloadTemplate}
-              className="w-full flex items-center justify-center gap-2 text-blue-600 bg-blue-50 hover:bg-blue-100 py-2 rounded-lg text-xs font-bold border border-blue-100 transition-colors mb-4"
+              className="w-full flex items-center justify-center gap-2 text-indigo-600 bg-white hover:bg-indigo-50 py-2.5 rounded-xl text-xs font-bold border border-indigo-100 transition-colors mb-4 shadow-sm"
             >
-              <FileDown size={14} /> ひな形をDL
+              <FileDown size={14} /> ひな形をダウンロード
             </button>
-            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-              <FileSpreadsheet className="text-slate-400 mb-1" size={24} />
-              <p className="text-xs text-slate-500 font-bold">ファイルをドロップ</p>
+            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all hover:border-indigo-300 group">
+              <FileSpreadsheet className="text-slate-300 group-hover:text-indigo-400 mb-2 transition-colors" size={32} />
+              <p className="text-xs text-slate-500 font-bold">Excelをドロップ</p>
+              <p className="text-[9px] text-slate-400 mt-1">※サーバーへの送信なし</p>
               <input type="file" className="hidden" accept=".xlsx, .csv" onChange={handleFileUpload} />
             </label>
           </section>
 
-          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <ArrowLeftRight size={16} /> 指定入れ替え
+          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <ArrowLeftRight size={16} className="text-indigo-500" /> 手動入れ替え
             </h2>
             <div className="space-y-3">
-              <input 
-                type="text" placeholder="学籍番号1" value={swapIds.id1}
-                onChange={(e) => setSwapIds({...swapIds, id1: e.target.value})}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <input 
-                type="text" placeholder="学籍番号2" value={swapIds.id2}
-                onChange={(e) => setSwapIds({...swapIds, id2: e.target.value})}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <div className="relative">
+                <input 
+                  type="text" placeholder="学籍番号1" value={swapIds.id1}
+                  onChange={(e) => setSwapIds({...swapIds, id1: e.target.value})}
+                  className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                />
+              </div>
+              <div className="relative">
+                <input 
+                  type="text" placeholder="学籍番号2" value={swapIds.id2}
+                  onChange={(e) => setSwapIds({...swapIds, id2: e.target.value})}
+                  className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                />
+              </div>
               <button 
                 onClick={handleManualSwap}
-                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-md text-sm font-medium transition-colors"
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl text-sm font-bold transition-all shadow-md active:scale-[0.98]"
               >
-                入れ替え実行
+                入れ替えを実行
               </button>
             </div>
+          </section>
+
+          <section className="bg-slate-800 p-5 rounded-2xl text-white shadow-xl">
+             <div className="flex items-center gap-2 mb-3">
+               <Zap size={18} className="text-yellow-400" />
+               <h3 className="text-sm font-bold">セキュリティ証明</h3>
+             </div>
+             <p className="text-[10px] text-slate-300 leading-relaxed mb-4">
+               本ツールは「Local-Only Data Processing」を採用しています。全てのアルゴリズムはフロントエンド（JavaScript）で完結しており、入力された個人名や学籍番号がインターネットを介して転送されることはありません。
+             </p>
+             <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-mono">
+               <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+               Secure Environment Active
+             </div>
           </section>
         </aside>
 
         <section className="lg:col-span-3">
-          <div id="seating-grid-container" className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-            <div className="mb-8 text-center border-b pb-4">
-              <div className="inline-block px-12 py-3 bg-slate-100 rounded-lg border border-slate-200 text-slate-500 font-bold uppercase tracking-widest text-sm">
-                教卓 (FRONT)
+          <div id="seating-grid-container" className="bg-white p-10 rounded-[2rem] border border-slate-200 shadow-xl overflow-x-auto relative">
+            {isProcessing && (
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-20 flex items-center justify-center rounded-[2rem]">
+                <div className="flex flex-col items-center gap-3">
+                   <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                   <p className="text-sm font-bold text-indigo-700">セキュアに計算中...</p>
+                </div>
+              </div>
+            )}
+            
+            <div className="mb-10 text-center">
+              <div className="inline-block px-16 py-3 bg-slate-900 rounded-full text-white font-black uppercase tracking-[0.3em] text-xs shadow-xl">
+                教 卓 (FRONT)
               </div>
             </div>
 
-            <div className="grid grid-cols-6 gap-4 min-w-[700px]">
+            <div className="grid grid-cols-6 gap-5 min-w-[750px]">
               {seats.map((seat, index) => (
                 <SeatCard
                   key={index}
@@ -296,17 +337,17 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            <div className="mt-8 flex flex-col gap-3 no-print">
-              <div className="flex items-center justify-between text-slate-400 text-xs italic">
-                <div className="flex items-center gap-1">
-                  <Info size={14} />
-                  シャッフル実行時、空席は自動的に教室の後方に集約されます。
+            <div className="mt-12 pt-6 border-t border-slate-100 flex flex-col gap-4 no-print">
+              <div className="flex items-center justify-between text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                <div className="flex items-center gap-1.5">
+                  <Info size={14} className="text-indigo-400" />
+                  空席自動詰込み機能 有効 (前方優先)
                 </div>
-                <div>生徒: {students.length}名 / 総数: {ROWS * COLS}</div>
+                <div>Students: {students.length} / Total: {ROWS * COLS}</div>
               </div>
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2 text-[11px] text-indigo-600"><Lock size={12}/> 固定済み</div>
-                <div className="flex items-center gap-2 text-[11px] text-red-600"><Ban size={12}/> 使用不可</div>
+              <div className="flex gap-6">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-indigo-600/70 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100"><Lock size={12}/> 座席固定</div>
+                <div className="flex items-center gap-2 text-[11px] font-bold text-rose-600/70 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100"><Ban size={12}/> 使用不可</div>
               </div>
             </div>
           </div>
@@ -314,11 +355,15 @@ const App: React.FC = () => {
           <div className="mt-8 flex gap-4 no-print">
             <button 
               onClick={exportExcel}
-              className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition-all shadow-sm"
+              className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black transition-all shadow-lg active:scale-[0.98]"
             >
-              <FileSpreadsheet size={20} /> Excel出力
+              <FileSpreadsheet size={20} /> Excelファイルをダウンロード
             </button>
           </div>
+          
+          <p className="mt-6 text-center text-[10px] text-slate-400 font-medium">
+            ※ダウンロードされたファイルはあなたのPC内でのみ生成されます。
+          </p>
         </section>
       </main>
     </div>

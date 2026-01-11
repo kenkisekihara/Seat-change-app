@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { 
   Shuffle, 
   ArrowLeftRight, 
   FileSpreadsheet, 
-  FileText, 
   Upload, 
   RefreshCcw,
   Info,
@@ -21,7 +21,6 @@ const App: React.FC = () => {
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
   const [swapIds, setSwapIds] = useState({ id1: '', id2: '' });
-  const [isExporting, setIsExporting] = useState(false);
 
   // 初期配置
   const initializeSeats = useCallback((studentList: Student[]) => {
@@ -208,43 +207,6 @@ const App: React.FC = () => {
     XLSX.writeFile(wb, "座席表_出力.xlsx");
   };
 
-  // PDF出力（html2canvasを使用し、日本語文字化けを回避）
-  const exportPDF = async () => {
-    const element = document.getElementById('seating-grid-container');
-    if (!element) return;
-    
-    setIsExporting(true);
-    try {
-      const { default: html2canvas } = await import('https://esm.sh/html2canvas@^1.4.1');
-      const { jsPDF } = await import('https://esm.sh/jspdf@^2.5.1');
-      
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff'
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const ratio = Math.min(pdfWidth / imgProps.width, pdfHeight / imgProps.height);
-      const width = imgProps.width * ratio;
-      const height = imgProps.height * ratio;
-
-      pdf.text("最終座席表", 10, 10);
-      pdf.addImage(imgData, 'PNG', 0, 15, width, height);
-      pdf.save("座席表.pdf");
-    } catch (err) {
-      console.error(err);
-      alert("PDFの生成に失敗しました。");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   return (
     <div className="min-h-screen pb-20">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm no-print">
@@ -253,7 +215,7 @@ const App: React.FC = () => {
             <div className="bg-blue-600 p-2 rounded-lg text-white">
               <RefreshCcw size={20} />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">スマート席替え Pro</h1>
+            <h1 className="text-xl font-bold tracking-tight">席替えツール</h1>
           </div>
           <button 
             onClick={handleShuffle}
@@ -355,14 +317,6 @@ const App: React.FC = () => {
               className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition-all shadow-sm"
             >
               <FileSpreadsheet size={20} /> Excel出力
-            </button>
-            <button 
-              onClick={exportPDF}
-              disabled={isExporting}
-              className={`flex-1 flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold transition-all shadow-sm ${isExporting ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {isExporting ? <RefreshCcw size={20} className="animate-spin" /> : <FileText size={20} />}
-              {isExporting ? 'PDF作成中...' : 'PDFで保存'}
             </button>
           </div>
         </section>

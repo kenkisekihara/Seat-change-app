@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { 
@@ -36,10 +35,6 @@ const App: React.FC = () => {
   const [sheetUrl, setSheetUrl] = useState('');
   const [lastSync, setLastSync] = useState<string | null>(null);
 
-  /**
-   * 座席の初期化ロジック
-   * 空席を「上（後方）」、生徒を「下（教卓側）」に集めるように配置
-   */
   const initializeSeats = useCallback((studentList: Student[]) => {
     const totalSeatsCount = ROWS * COLS;
     const newSeats: Seat[] = [];
@@ -141,7 +136,7 @@ const App: React.FC = () => {
       const response = await fetch(fetchUrl);
       
       if (!response.ok) {
-        throw new Error("取得に失敗しました。URLが正しいか確認してください。");
+        throw new Error("取得に失敗しました。URLが正しいか、公開設定を確認してください。");
       }
       
       const csvText = await response.text();
@@ -157,7 +152,7 @@ const App: React.FC = () => {
       })).filter(s => s.id);
 
       if (imported.length === 0) {
-        alert("有効な生徒データが見つかりませんでした。");
+        alert("有効な生徒データが見つかりませんでした。列名を確認してください。");
       } else {
         setStudents(imported);
         initializeSeats(imported);
@@ -213,7 +208,7 @@ const App: React.FC = () => {
     const idx1 = seats.findIndex(s => s.student?.id === id1);
     const idx2 = seats.findIndex(s => s.student?.id === id2);
     if (idx1 === -1 || idx2 === -1) {
-      alert("該当する学籍番号の生徒が見つかりません。");
+      alert("該当する生徒が見つかりません。");
       return;
     }
     const newSeats = [...seats];
@@ -289,9 +284,9 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
-      <div className="bg-indigo-900 text-indigo-100 py-2 px-4 text-center text-[10px] font-bold tracking-widest uppercase flex items-center justify-center gap-2">
-        <ShieldCheck size={14} className="text-emerald-400" />
-        Vercel Secure Deployment: 全てのデータ処理はブラウザ上で完結します
+      <div className="bg-slate-900 text-slate-400 py-2 px-4 text-center text-[10px] font-bold tracking-widest uppercase flex items-center justify-center gap-2">
+        <ShieldCheck size={14} className="text-emerald-500" />
+        SERVERLESS SECURE ARCHITECTURE: すべてのデータはブラウザ上で暗号化処理されます
       </div>
 
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
@@ -303,7 +298,7 @@ const App: React.FC = () => {
             <div>
               <h1 className="text-xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
                 席替えツール
-                <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-full font-bold">PRO v2.5</span>
+                <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-full font-bold">LITE v2.5</span>
               </h1>
             </div>
           </div>
@@ -312,7 +307,7 @@ const App: React.FC = () => {
             <button 
               onClick={handleShuffle}
               disabled={isProcessing || students.length === 0}
-              className={`flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg shadow-indigo-100 active:scale-95 ${isProcessing || students.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg shadow-indigo-100 active:scale-95 ${isProcessing || students.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {isProcessing ? <RefreshCcw size={18} className="animate-spin" /> : <Shuffle size={18} />}
               席替え実行
@@ -362,17 +357,17 @@ const App: React.FC = () => {
               <EyeOff size={80} />
             </div>
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Upload size={16} className="text-indigo-500" /> 手動読み込み
+              <Upload size={16} className="text-indigo-500" /> ローカル読込
             </h2>
             <button 
               onClick={downloadTemplate}
               className="w-full flex items-center justify-center gap-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 py-3 rounded-2xl text-xs font-bold transition-colors mb-4 border border-indigo-100 shadow-sm"
             >
-              <FileDown size={14} /> ひな形DL
+              <FileDown size={14} /> テンプレートDL
             </button>
             <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all hover:border-indigo-400 group">
               <FileSpreadsheet className="text-slate-300 group-hover:text-indigo-400 mb-1 transition-colors" size={24} />
-              <p className="text-[10px] text-slate-500 font-bold">Excel/CSVをアップ</p>
+              <p className="text-[10px] text-slate-500 font-bold">Excel/CSVをアップロード</p>
               <input type="file" className="hidden" accept=".xlsx, .csv" onChange={handleFileUpload} />
             </label>
           </section>
@@ -388,7 +383,7 @@ const App: React.FC = () => {
                   {aiAdvice}
                 </div>
               ) : (
-                <p className="text-[10px] text-indigo-100/70 mb-4">Gemini AIが最適な配置のアドバイスを生成します。</p>
+                <p className="text-[10px] text-indigo-100/70 mb-4">名簿構成からAIが配置のポイントを提案します。</p>
               )}
               <button 
                 onClick={handleGetAiAdvice}
@@ -396,14 +391,14 @@ const App: React.FC = () => {
                 className="w-full bg-white text-indigo-700 hover:bg-indigo-50 py-3 rounded-xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isAiLoading ? <RefreshCcw size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                アドバイスを得る
+                アドバイス生成
               </button>
             </div>
           </section>
 
           <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <ArrowLeftRight size={16} className="text-indigo-500" /> ピンポイント移動
+              <ArrowLeftRight size={16} className="text-indigo-500" /> 直接移動
             </h2>
             <div className="space-y-3">
               <input 
@@ -436,14 +431,14 @@ const App: React.FC = () => {
                       <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                       <ShieldCheck className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600" size={24} />
                    </div>
-                   <p className="text-sm font-black text-indigo-700 tracking-widest animate-pulse">同期・計算中...</p>
+                   <p className="text-sm font-black text-indigo-700 tracking-widest animate-pulse">同期中...</p>
                 </div>
               </div>
             )}
             
             <div className="mb-8 flex items-center justify-center gap-4">
               <div className="h-[1px] flex-1 bg-slate-100"></div>
-              <div className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">教室後方 / WINDOW</div>
+              <div className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">教室後方 (WINDOW)</div>
               <div className="h-[1px] flex-1 bg-slate-100"></div>
             </div>
 
@@ -484,7 +479,7 @@ const App: React.FC = () => {
               </div>
               <div className="text-[11px] font-black text-slate-500 bg-slate-100 px-4 py-2 rounded-full border border-slate-200 uppercase tracking-widest flex items-center gap-2">
                 <CheckCircle2 size={12} className="text-emerald-500" />
-                名簿数: <span className="text-indigo-600">{students.length}</span>
+                現在の名簿数: <span className="text-indigo-600">{students.length}</span>
               </div>
             </div>
           </div>
@@ -495,14 +490,9 @@ const App: React.FC = () => {
               disabled={students.length === 0}
               className={`flex-1 flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white py-5 rounded-3xl font-black transition-all shadow-lg active:scale-[0.98] disabled:opacity-50`}
             >
-              <FileSpreadsheet size={22} /> Excelに保存
+              <FileSpreadsheet size={22} /> 座席表をExcel出力
             </button>
           </div>
-          
-          <p className="mt-6 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-loose">
-            ※生成されたデータはブラウザの一時メモリ内でのみ保持されます。<br/>
-            保存が必要な場合はExcelエクスポートをご利用ください。
-          </p>
         </section>
       </main>
     </div>

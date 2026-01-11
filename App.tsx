@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { 
@@ -11,18 +12,15 @@ import {
   Lock,
   Ban,
   ShieldCheck,
-  Zap,
   EyeOff,
-  Sparkles,
-  Globe,
-  Database,
   CheckCircle2,
-  AlertCircle
+  HardDriveDownload,
+  ServerOff,
+  Layout
 } from 'lucide-react';
 import { Student, Seat, Gender } from './types';
 import { ROWS, COLS, DEFAULT_STUDENTS } from './constants';
 import SeatCard from './components/SeatCard';
-import { analyzeSeating } from './services/geminiService';
 
 const App: React.FC = () => {
   const [students, setStudents] = useState<Student[]>(DEFAULT_STUDENTS);
@@ -30,11 +28,11 @@ const App: React.FC = () => {
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
   const [swapIds, setSwapIds] = useState({ id1: '', id2: '' });
   const [isProcessing, setIsProcessing] = useState(false);
-  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [sheetUrl, setSheetUrl] = useState('');
-  const [lastSync, setLastSync] = useState<string | null>(null);
 
+  /**
+   * 座席の初期化
+   * 空席を教室後方（画面上部）に配置するロジック
+   */
   const initializeSeats = useCallback((studentList: Student[]) => {
     const totalSeatsCount = ROWS * COLS;
     const newSeats: Seat[] = [];
@@ -73,7 +71,6 @@ const App: React.FC = () => {
     }
 
     setIsProcessing(true);
-    setAiAdvice(null);
 
     setTimeout(() => {
       const targetIndices = seats.reduce((acc, seat, idx) => {
@@ -87,7 +84,7 @@ const App: React.FC = () => {
         .filter((s): s is Student => s !== null);
 
       if (targetIndices.length < studentsInPlay.length) {
-        alert("有効な座席数が不足しています。座席のロックまたは使用不可設定を見直してください。");
+        alert("有効な座席数が不足しています。座席設定を見直してください。");
         setIsProcessing(false);
         return;
       }
@@ -109,61 +106,7 @@ const App: React.FC = () => {
       setSeats(newSeats);
       setSelectedSeatIndex(null);
       setIsProcessing(false);
-    }, 600); 
-  };
-
-  const handleGetAiAdvice = async () => {
-    if (students.length === 0) return;
-    setIsAiLoading(true);
-    const advice = await analyzeSeating(students);
-    setAiAdvice(advice);
-    setIsAiLoading(false);
-  };
-
-  const handleFetchFromSheet = async () => {
-    if (!sheetUrl) {
-      alert("スプレッドシートのURLを入力してください。");
-      return;
-    }
-    
-    let sheetId = sheetUrl;
-    const match = sheetUrl.match(/\/d\/(.*?)(\/|$)/);
-    if (match) sheetId = match[1];
-
-    setIsProcessing(true);
-    try {
-      const fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
-      const response = await fetch(fetchUrl);
-      
-      if (!response.ok) {
-        throw new Error("取得に失敗しました。URLが正しいか、公開設定を確認してください。");
-      }
-      
-      const csvText = await response.text();
-      const workbook = XLSX.read(csvText, { type: 'string' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet) as any[];
-      
-      const imported = json.map((row: any) => ({
-        id: String(row['学籍番号'] || row['id'] || row['学番'] || ''),
-        name: String(row['名前'] || row['name'] || row['氏名'] || '不明'),
-        subject: String(row['選択科目'] || row['subject'] || row['コース'] || ''),
-        gender: ((row['性別'] === '女' || row['gender'] === 'female' || row['性別'] === 'F') ? '女' : '男') as Gender
-      })).filter(s => s.id);
-
-      if (imported.length === 0) {
-        alert("有効な生徒データが見つかりませんでした。列名を確認してください。");
-      } else {
-        setStudents(imported);
-        initializeSeats(imported);
-        setLastSync(new Date().toLocaleTimeString());
-      }
-    } catch (error) {
-      console.error(error);
-      alert("同期エラー: スプレッドシートが閲覧可能に設定されている必要があります。");
-    } finally {
-      setIsProcessing(false);
-    }
+    }, 500); 
   };
 
   const handleToggleLock = (index: number, e: React.MouseEvent) => {
@@ -227,7 +170,7 @@ const App: React.FC = () => {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template");
-    XLSX.writeFile(wb, "席替えテンプレート.xlsx");
+    XLSX.writeFile(wb, "名簿テンプレート.xlsx");
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,7 +191,6 @@ const App: React.FC = () => {
       })).filter(s => s.id);
       setStudents(imported);
       initializeSeats(imported);
-      setLastSync(null);
       setIsProcessing(false);
     };
     reader.readAsBinaryString(file);
@@ -284,217 +226,216 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
-      <div className="bg-slate-900 text-slate-400 py-2 px-4 text-center text-[10px] font-bold tracking-widest uppercase flex items-center justify-center gap-2">
-        <ShieldCheck size={14} className="text-emerald-500" />
-        SERVERLESS SECURE ARCHITECTURE: すべてのデータはブラウザ上で暗号化処理されます
+      {/* Privacy Top Banner */}
+      <div className="bg-emerald-900 text-emerald-100 py-2.5 px-4 text-center text-[11px] font-bold tracking-widest uppercase flex items-center justify-center gap-2.5 shadow-sm">
+        <ShieldCheck size={16} className="text-emerald-400" />
+        <span>セキュア・プライバシーモード: データはサーバーへ送信されません</span>
+        <span className="hidden sm:inline-block opacity-40 ml-4 font-normal">|</span>
+        <span className="hidden sm:inline flex items-center gap-1.5 ml-4 text-emerald-300">
+          <ServerOff size={14} /> NO SERVER LOGS
+        </span>
       </div>
 
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-indigo-200 shadow-xl">
-              <ShieldCheck size={22} />
+            <div className="bg-indigo-600 p-2 rounded-xl sm:p-2.5 sm:rounded-2xl text-white shadow-xl shadow-indigo-100">
+              <ShieldCheck size={20} className="sm:w-[24px] sm:h-[24px]" />
             </div>
             <div>
-              <h1 className="text-xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
-                席替えツール
-                <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-full font-bold">LITE v2.5</span>
+              <h1 className="text-lg sm:text-xl font-black text-slate-800 tracking-tighter">
+                席替えツール <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold ml-1 uppercase">Wide Edition</span>
               </h1>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handleShuffle}
-              disabled={isProcessing || students.length === 0}
-              className={`flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg shadow-indigo-100 active:scale-95 ${isProcessing || students.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {isProcessing ? <RefreshCcw size={18} className="animate-spin" /> : <Shuffle size={18} />}
-              席替え実行
-            </button>
-          </div>
+          <button 
+            onClick={handleShuffle}
+            disabled={isProcessing || students.length === 0}
+            className={`flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 sm:px-14 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50 disabled:shadow-none`}
+          >
+            {isProcessing ? <RefreshCcw size={16} className="animate-spin sm:w-[18px] sm:h-[18px]" /> : <Shuffle size={16} className="sm:w-[18px] sm:h-[18px]" />}
+            席替え実行
+          </button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 pt-8 grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <aside className="lg:col-span-1 flex flex-col gap-6">
-          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-3 opacity-[0.05]">
-              <Database size={60} className="text-emerald-500" />
+      <main className="max-w-[1800px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 grid grid-cols-1 xl:grid-cols-5 gap-8">
+        {/* Sidebar */}
+        <aside className="xl:col-span-1 flex flex-col gap-6">
+          
+          {/* Privacy Awareness Card */}
+          <section className="bg-white p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-[0.05]">
+              <Lock size={64} className="text-emerald-600" />
             </div>
-            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Database size={16} className="text-emerald-500" /> スプレッドシート同期
+            <h2 className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <ShieldCheck size={16} /> プライバシー保護
             </h2>
-            <div className="space-y-3">
-              <div className="relative">
-                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <input 
-                  type="text" 
-                  placeholder="URL または ID" 
-                  value={sheetUrl}
-                  onChange={(e) => setSheetUrl(e.target.value)}
-                  className="w-full pl-9 pr-4 py-3 text-xs border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
-                />
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                <div className="mt-1"><ServerOff size={16} className="text-slate-400" /></div>
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  本アプリはクライアントサイド・レンダリングを採用しています。データはサーバーに保存されず、ブラウザを閉じると完全に消去されます。
+                </p>
               </div>
-              <button 
-                onClick={handleFetchFromSheet}
-                disabled={isProcessing}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isProcessing && sheetUrl ? <RefreshCcw size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
-                DBから同期
-              </button>
-              {lastSync && (
-                <div className="text-[9px] text-center text-emerald-600 font-bold animate-in fade-in">
-                   最終同期: {lastSync}
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+                <div className="flex items-center gap-2 text-[10px] font-black text-emerald-700 uppercase mb-1">
+                  <CheckCircle2 size={12} /> 安全ステータス
                 </div>
-              )}
+                <div className="text-[10px] text-emerald-600/80 font-bold">
+                  ローカル処理のみ (安全)
+                </div>
+              </div>
             </div>
           </section>
 
-          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-3 opacity-[0.03]">
-              <EyeOff size={80} />
-            </div>
+          <section className="bg-white p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Upload size={16} className="text-indigo-500" /> ローカル読込
+              <Upload size={16} className="text-indigo-500" /> 名簿読み込み
             </h2>
             <button 
               onClick={downloadTemplate}
-              className="w-full flex items-center justify-center gap-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 py-3 rounded-2xl text-xs font-bold transition-colors mb-4 border border-indigo-100 shadow-sm"
+              className="w-full flex items-center justify-center gap-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 py-3 rounded-2xl text-xs font-bold transition-colors mb-4 border border-indigo-100"
             >
               <FileDown size={14} /> テンプレートDL
             </button>
-            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all hover:border-indigo-400 group">
-              <FileSpreadsheet className="text-slate-300 group-hover:text-indigo-400 mb-1 transition-colors" size={24} />
-              <p className="text-[10px] text-slate-500 font-bold">Excel/CSVをアップロード</p>
+            <label className="flex flex-col items-center justify-center w-full h-32 sm:h-40 border-2 border-dashed border-slate-200 rounded-[1.5rem] sm:rounded-[2rem] cursor-pointer hover:bg-slate-50 transition-all hover:border-indigo-400 group">
+              <FileSpreadsheet className="text-slate-300 group-hover:text-indigo-400 mb-2 transition-colors" size={32} />
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider text-center px-4">Excel / CSV をアップロード</p>
               <input type="file" className="hidden" accept=".xlsx, .csv" onChange={handleFileUpload} />
             </label>
           </section>
 
-          <section className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-3xl text-white shadow-xl shadow-indigo-100 relative overflow-hidden group">
-            <Sparkles className="absolute -bottom-2 -right-2 text-indigo-400/20 group-hover:scale-110 transition-transform" size={100} />
-            <div className="relative z-10">
-              <h2 className="text-xs font-black text-indigo-200 uppercase tracking-widest mb-3 flex items-center gap-2">
-                <Sparkles size={14} /> AI分析
-              </h2>
-              {aiAdvice ? (
-                <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl text-[11px] border border-white/20 mb-4 animate-in fade-in slide-in-from-bottom-2 leading-relaxed">
-                  {aiAdvice}
-                </div>
-              ) : (
-                <p className="text-[10px] text-indigo-100/70 mb-4">名簿構成からAIが配置のポイントを提案します。</p>
-              )}
-              <button 
-                onClick={handleGetAiAdvice}
-                disabled={isAiLoading || students.length === 0}
-                className="w-full bg-white text-indigo-700 hover:bg-indigo-50 py-3 rounded-xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isAiLoading ? <RefreshCcw size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                アドバイス生成
-              </button>
-            </div>
-          </section>
-
-          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          <section className="bg-white p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-200 shadow-sm">
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <ArrowLeftRight size={16} className="text-indigo-500" /> 直接移動
+              <ArrowLeftRight size={16} className="text-indigo-500" /> 手動入れ替え
             </h2>
             <div className="space-y-3">
               <input 
-                type="text" placeholder="学籍番号1" value={swapIds.id1}
+                type="text" placeholder="学籍番号 1" value={swapIds.id1}
                 onChange={(e) => setSwapIds({...swapIds, id1: e.target.value})}
-                className="w-full px-4 py-3 text-xs border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                className="w-full px-5 py-3.5 text-xs border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
               />
               <input 
-                type="text" placeholder="学籍番号2" value={swapIds.id2}
+                type="text" placeholder="学籍番号 2" value={swapIds.id2}
                 onChange={(e) => setSwapIds({...swapIds, id2: e.target.value})}
-                className="w-full px-4 py-3 text-xs border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                className="w-full px-5 py-3.5 text-xs border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
               />
               <button 
                 onClick={handleManualSwap}
                 disabled={students.length === 0}
-                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-2xl text-xs font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl text-xs font-bold transition-all disabled:opacity-30 shadow-lg"
               >
-                入れ替え
+                入れ替え実行
               </button>
             </div>
           </section>
         </aside>
 
-        <section className="lg:col-span-3">
-          <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-xl overflow-x-auto relative min-h-[600px]">
-            {isProcessing && (
-              <div className="absolute inset-0 bg-white/70 backdrop-blur-[4px] z-50 flex items-center justify-center rounded-[3rem]">
-                <div className="flex flex-col items-center gap-4">
-                   <div className="relative">
-                      <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                      <ShieldCheck className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600" size={24} />
-                   </div>
-                   <p className="text-sm font-black text-indigo-700 tracking-widest animate-pulse">同期中...</p>
-                </div>
-              </div>
-            )}
+        {/* Main Seat Area */}
+        <section className="xl:col-span-4">
+          <div className="bg-white p-6 sm:p-14 rounded-[2.5rem] sm:rounded-[4rem] border border-slate-200 shadow-xl relative min-h-[500px] sm:min-h-[700px] flex flex-col overflow-x-auto">
             
-            <div className="mb-8 flex items-center justify-center gap-4">
-              <div className="h-[1px] flex-1 bg-slate-100"></div>
-              <div className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">教室後方 (WINDOW)</div>
-              <div className="h-[1px] flex-1 bg-slate-100"></div>
-            </div>
-
-            <div className="grid grid-cols-6 gap-6 min-w-[800px]">
-              {seats.map((seat, index) => (
-                <SeatCard
-                  key={index}
-                  student={seat.student}
-                  row={seat.row}
-                  col={seat.col}
-                  isSelected={selectedSeatIndex === index}
-                  isLocked={seat.isLocked}
-                  isUnusable={seat.isUnusable}
-                  onClick={() => handleSeatClick(index)}
-                  onToggleLock={(e) => handleToggleLock(index, e)}
-                  onToggleUnusable={(e) => handleToggleUnusable(index, e)}
-                />
-              ))}
-            </div>
-
-            <div className="mt-14 mb-4 text-center">
-              <div className="relative inline-block px-24 py-5 bg-slate-900 rounded-3xl text-white font-black uppercase tracking-[0.4em] text-sm shadow-2xl border-4 border-slate-800">
-                教 卓 (前方)
+            {/* Classroom Layout Guide */}
+            <div className="flex items-center justify-between mb-8 sm:mb-10 px-2 sm:px-6 text-[8px] sm:text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] sm:tracking-[0.6em] min-w-[500px] sm:min-w-0">
+              <div className="flex items-center gap-2">
+                <Layout size={14} className="rotate-180" /> 廊下側
+              </div>
+              <div className="flex items-center gap-4 sm:gap-6 flex-1 px-4 sm:px-10">
+                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-slate-100"></div>
+                <span className="whitespace-nowrap">教 室 後 方</span>
+                <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-slate-100"></div>
+              </div>
+              <div className="flex items-center gap-2">
+                窓側 <Layout size={14} />
               </div>
             </div>
 
-            <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
-              <div className="flex flex-wrap items-center gap-5">
-                <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600/60 bg-indigo-50 px-4 py-2 rounded-2xl border border-indigo-100/50 shadow-sm uppercase tracking-wider">
-                  <Lock size={12}/> 座席固定
+            {/* Seating Grid */}
+            <div className="flex-1 overflow-x-auto sm:overflow-visible">
+              <div className="grid grid-cols-6 gap-2 sm:gap-6 xl:gap-8 min-w-[450px] sm:min-w-0">
+                {seats.map((seat, index) => (
+                  <SeatCard
+                    key={index}
+                    student={seat.student}
+                    row={seat.row}
+                    col={seat.col}
+                    isSelected={selectedSeatIndex === index}
+                    isLocked={seat.isLocked}
+                    isUnusable={seat.isUnusable}
+                    onClick={() => handleSeatClick(index)}
+                    onToggleLock={(e) => handleToggleLock(index, e)}
+                    onToggleUnusable={(e) => handleToggleUnusable(index, e)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Front Area (Teacher's Desk) */}
+            <div className="mt-12 sm:mt-20 mb-4 text-center min-w-[450px] sm:min-w-0">
+              <div className="relative inline-block px-12 sm:px-36 py-4 sm:py-8 bg-slate-900 rounded-2xl sm:rounded-[3rem] text-white font-black uppercase tracking-[0.3em] sm:tracking-[0.5em] text-xs sm:text-sm shadow-2xl border-[4px] sm:border-[8px] border-slate-800 transition-transform hover:scale-105">
+                <div className="absolute -top-3 sm:-top-4 left-1/2 -translate-x-1/2 bg-indigo-500 text-[8px] sm:text-[9px] px-3 sm:px-4 py-0.5 sm:py-1 rounded-full text-white font-black shadow-lg">FRONT AREA</div>
+                教 卓 (前 方)
+              </div>
+            </div>
+
+            {/* Indicators & Stats */}
+            <div className="mt-10 sm:mt-16 pt-8 sm:pt-10 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-10 min-w-[450px] sm:min-w-0">
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8">
+                <div className="flex items-center gap-2 sm:gap-3 text-[8px] sm:text-[10px] font-black text-indigo-600 bg-indigo-50/50 px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border border-indigo-100/50 shadow-sm">
+                  <Lock size={12} className="sm:w-[14px] sm:h-[14px]" /> 固定
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-black text-rose-600/60 bg-rose-50 px-4 py-2 rounded-2xl border border-rose-100/50 shadow-sm uppercase tracking-wider">
-                  <Ban size={12}/> 使用不可
+                <div className="flex items-center gap-2 sm:gap-3 text-[8px] sm:text-[10px] font-black text-rose-600 bg-rose-50/50 px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border border-rose-100/50 shadow-sm">
+                  <Ban size={12} className="sm:w-[14px] sm:h-[14px]" /> 不可
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-200/50 shadow-sm uppercase tracking-wider">
-                  <Info size={12}/> 空席は後方へ集約
+                <div className="flex items-center gap-2 sm:gap-3 text-[8px] sm:text-[10px] font-black text-slate-400 bg-slate-50 px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border border-slate-200/50 shadow-sm text-center">
+                  <Info size={12} className="sm:w-[14px] sm:h-[14px]" /> 空席は後方へ
                 </div>
               </div>
-              <div className="text-[11px] font-black text-slate-500 bg-slate-100 px-4 py-2 rounded-full border border-slate-200 uppercase tracking-widest flex items-center gap-2">
-                <CheckCircle2 size={12} className="text-emerald-500" />
-                現在の名簿数: <span className="text-indigo-600">{students.length}</span>
+              
+              <div className="flex items-center gap-6">
+                <div className="text-[10px] sm:text-[11px] font-black text-slate-500 bg-slate-100 px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-[1.5rem] border border-slate-200 flex items-center gap-2 sm:gap-3 shadow-inner">
+                  <CheckCircle2 size={14} className="text-emerald-500 sm:w-[16px] sm:h-[16px]" />
+                  登録: <span className="text-indigo-600 text-sm sm:text-base">{students.length} 名</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-8 flex gap-4">
+          <div className="mt-8 sm:mt-10">
             <button 
               onClick={exportExcel}
               disabled={students.length === 0}
-              className={`flex-1 flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white py-5 rounded-3xl font-black transition-all shadow-lg active:scale-[0.98] disabled:opacity-50`}
+              className="w-full flex items-center justify-center gap-3 sm:gap-4 bg-emerald-600 hover:bg-emerald-700 text-white py-5 sm:py-7 rounded-[2rem] sm:rounded-[3rem] font-black transition-all shadow-2xl shadow-emerald-100 active:scale-[0.99] disabled:opacity-50 disabled:shadow-none text-sm sm:text-lg"
             >
-              <FileSpreadsheet size={22} /> 座席表をExcel出力
+              <HardDriveDownload size={22} className="sm:w-[28px] sm:h-[28px]" /> 
+              <span>座席表をExcel出力 (.xlsx)</span>
             </button>
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <p className="text-center text-[8px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] leading-relaxed px-4">
+                ※ セキュリティ保護のため、ブラウザのリロードで全データが完全に消去されます。
+              </p>
+              <div className="flex items-center gap-2 text-[8px] sm:text-[9px] text-emerald-500 font-bold uppercase bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                <ShieldCheck size={10} className="sm:w-[12px] sm:h-[12px]" /> Privacy Verified: Local Execution
+              </div>
+            </div>
           </div>
         </section>
       </main>
+
+      {/* Static Floating Alert */}
+      <div className="fixed bottom-8 right-8 no-print hidden 2xl:block">
+        <div className="bg-white/90 backdrop-blur-xl border border-indigo-100 p-5 rounded-[2rem] shadow-2xl flex items-center gap-5 border-l-[6px] border-l-indigo-600">
+          <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600">
+            <Layout size={24} />
+          </div>
+          <div>
+            <div className="text-[11px] font-black text-slate-800 uppercase tracking-wider">Wide Layout Active</div>
+            <div className="text-[10px] text-slate-500 font-bold">Optimization for Large Screens</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

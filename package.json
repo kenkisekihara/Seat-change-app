@@ -1,5 +1,5 @@
 {
-  "name": "スマート席替え-pro-for-streamlit",
+  "name": "スマート席替え-pro",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -14,8 +14,8 @@
     "@google/genai": "^1.35.0",
     "lucide-react": "^0.562.0",
     "xlsx": "^0.18.5",
-    "jspdf": "^4.0.0",
-    "jspdf-autotable": "^5.0.7"
+    "jspdf": "^2.5.1",
+    "html2canvas": "^1.4.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

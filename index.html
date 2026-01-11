@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -12,6 +11,18 @@
           font-family: 'Inter', 'Noto Sans JP', sans-serif; 
           background-color: #f8fafc;
         }
+        /* 印刷用スタイル */
+        @media print {
+            body { background-color: white; }
+            header, .lg:col-span-1, .no-print, button { display: none !important; }
+            main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+            .lg:col-span-3 { width: 100% !important; }
+            .bg-white { border: none !important; box-shadow: none !important; }
+            .grid { gap: 8px !important; }
+            .h-24 { height: 80px !important; }
+            .text-slate-400, .text-slate-500 { color: black !important; }
+            .bg-indigo-50, .bg-slate-100, .bg-red-50 { background-color: transparent !important; border: 1px solid #ccc !important; }
+        }
     </style>
 <script type="importmap">
 {
@@ -23,8 +34,8 @@
     "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "xlsx": "https://esm.sh/xlsx@^0.18.5",
-    "jspdf": "https://esm.sh/jspdf@^4.0.0",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@^5.0.7"
+    "jspdf": "https://esm.sh/jspdf@^2.5.1",
+    "html2canvas": "https://esm.sh/html2canvas@^1.4.1"
   }
 }
 </script>

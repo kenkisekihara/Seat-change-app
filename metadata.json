@@ -1,5 +1,5 @@
 {
-  "name": "スマート席替え Pro for Streamlit",
-  "description": "Python/StreamlitとGemini APIを活用した、高度な座席管理・配置最適化システムです。",
+  "name": "スマート席替え Pro",
+  "description": "直感的な操作で座席配置を最適化する、高機能な座席管理システムです。",
   "requestFramePermissions": []
 }

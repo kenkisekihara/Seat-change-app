@@ -12,9 +12,7 @@ import {
   Lock,
   Ban,
   ShieldCheck,
-  EyeOff,
   CheckCircle2,
-  HardDriveDownload,
   ServerOff,
   Layout
 } from 'lucide-react';
@@ -230,10 +228,6 @@ const App: React.FC = () => {
       <div className="bg-emerald-900 text-emerald-100 py-2.5 px-4 text-center text-[11px] font-bold tracking-widest uppercase flex items-center justify-center gap-2.5 shadow-sm">
         <ShieldCheck size={16} className="text-emerald-400" />
         <span>セキュア・プライバシーモード: データはサーバーへ送信されません</span>
-        <span className="hidden sm:inline-block opacity-40 ml-4 font-normal">|</span>
-        <span className="hidden sm:inline flex items-center gap-1.5 ml-4 text-emerald-300">
-          <ServerOff size={14} /> NO SERVER LOGS
-        </span>
       </div>
 
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
@@ -244,7 +238,7 @@ const App: React.FC = () => {
             </div>
             <div>
               <h1 className="text-lg sm:text-xl font-black text-slate-800 tracking-tighter">
-                席替えツール <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold ml-1 uppercase">Wide Edition</span>
+                席替えツール
               </h1>
             </div>
           </div>
@@ -409,7 +403,7 @@ const App: React.FC = () => {
               disabled={students.length === 0}
               className="w-full flex items-center justify-center gap-3 sm:gap-4 bg-emerald-600 hover:bg-emerald-700 text-white py-5 sm:py-7 rounded-[2rem] sm:rounded-[3rem] font-black transition-all shadow-2xl shadow-emerald-100 active:scale-[0.99] disabled:opacity-50 disabled:shadow-none text-sm sm:text-lg"
             >
-              <HardDriveDownload size={22} className="sm:w-[28px] sm:h-[28px]" /> 
+              <FileSpreadsheet size={22} className="sm:w-[28px] sm:h-[28px]" /> 
               <span>座席表をExcel出力 (.xlsx)</span>
             </button>
             <div className="mt-6 flex flex-col items-center gap-2">
@@ -423,19 +417,6 @@ const App: React.FC = () => {
           </div>
         </section>
       </main>
-
-      {/* Static Floating Alert */}
-      <div className="fixed bottom-8 right-8 no-print hidden 2xl:block">
-        <div className="bg-white/90 backdrop-blur-xl border border-indigo-100 p-5 rounded-[2rem] shadow-2xl flex items-center gap-5 border-l-[6px] border-l-indigo-600">
-          <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600">
-            <Layout size={24} />
-          </div>
-          <div>
-            <div className="text-[11px] font-black text-slate-800 uppercase tracking-wider">Wide Layout Active</div>
-            <div className="text-[10px] text-slate-500 font-bold">Optimization for Large Screens</div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

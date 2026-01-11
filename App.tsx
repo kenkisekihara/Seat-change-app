@@ -15,7 +15,9 @@ import {
   Zap,
   EyeOff,
   Sparkles,
-  Printer
+  Printer,
+  Globe,
+  Database
 } from 'lucide-react';
 import { Student, Seat, Gender } from './types';
 import { ROWS, COLS, DEFAULT_STUDENTS } from './constants';
@@ -30,6 +32,7 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState('');
 
   /**
    * 座席の初期化ロジック
@@ -39,7 +42,6 @@ const App: React.FC = () => {
     const totalSeatsCount = ROWS * COLS;
     const newSeats: Seat[] = [];
 
-    // まず全ての座席を空席（null）で作成
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         newSeats.push({
@@ -52,8 +54,6 @@ const App: React.FC = () => {
       }
     }
 
-    // 教卓に近い順（インデックスが大きい順）に生徒を配置していく
-    // reversedIndices: [41, 40, 39, ..., 0]
     const reversedIndices = Array.from({ length: totalSeatsCount }, (_, i) => i).reverse();
     
     studentList.forEach((student, i) => {
@@ -76,16 +76,14 @@ const App: React.FC = () => {
     }
 
     setIsProcessing(true);
-    setAiAdvice(null); // 前のアドバイスを消去
+    setAiAdvice(null);
 
     setTimeout(() => {
-      // 1. 固定・不可でない座席インデックスを取得
       const targetIndices = seats.reduce((acc, seat, idx) => {
         if (!seat.isLocked && !seat.isUnusable) acc.push(idx);
         return acc;
       }, [] as number[]);
 
-      // 2. 現在それらの座席にいる生徒を抽出
       const studentsInPlay = seats
         .filter((_, idx) => targetIndices.includes(idx))
         .map(s => s.student)
@@ -97,17 +95,14 @@ const App: React.FC = () => {
         return;
       }
 
-      // 3. 生徒をランダムに並び替え
       const shuffledStudents = [...studentsInPlay].sort(() => Math.random() - 0.5);
       const newSeats = [...seats];
       
-      // 一旦対象座席をクリア
       targetIndices.forEach(idx => {
         newSeats[idx].student = null;
       });
 
-      // 4. 空席を上側に集めるため、インデックスの大きい方（下）から生徒を詰めていく
-      const fillIndices = [...targetIndices].sort((a, b) => b - a); // 降順 (41, 40, ...)
+      const fillIndices = [...targetIndices].sort((a, b) => b - a);
       
       shuffledStudents.forEach((student, i) => {
         const seatIdx = fillIndices[i];
@@ -126,6 +121,45 @@ const App: React.FC = () => {
     const advice = await analyzeSeating(students);
     setAiAdvice(advice);
     setIsAiLoading(false);
+  };
+
+  const handleFetchFromSheet = async () => {
+    if (!sheetUrl) return;
+    
+    let sheetId = sheetUrl;
+    const match = sheetUrl.match(/\/d\/(.*?)(\/|$)/);
+    if (match) sheetId = match[1];
+
+    setIsProcessing(true);
+    try {
+      const fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+      const response = await fetch(fetchUrl);
+      if (!response.ok) throw new Error("スプレッドシートの取得に失敗しました。公開設定を確認してください。");
+      
+      const csvText = await response.text();
+      const workbook = XLSX.read(csvText, { type: 'string' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet) as any[];
+      
+      const imported = json.map((row: any) => ({
+        id: String(row['学籍番号'] || row['id'] || ''),
+        name: String(row['名前'] || row['name'] || '不明'),
+        subject: String(row['選択科目'] || row['subject'] || ''),
+        gender: ((row['性別'] === '女' || row['gender'] === 'female') ? '女' : '男') as Gender
+      })).filter(s => s.id);
+
+      if (imported.length === 0) {
+        alert("有効な生徒データが見つかりませんでした。列名（学籍番号, 名前, 性別, 選択科目）を確認してください。");
+      } else {
+        setStudents(imported);
+        initializeSeats(imported);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("エラーが発生しました。スプレッドシートが「リンクを知っている全員」に閲覧許可されているか確認してください。");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleToggleLock = (index: number, e: React.MouseEvent) => {
@@ -249,7 +283,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
-      {/* Privacy Badge */}
       <div className="bg-indigo-900 text-indigo-100 py-2 px-4 text-center text-[10px] font-bold tracking-widest uppercase flex items-center justify-center gap-2 no-print">
         <ShieldCheck size={14} className="text-emerald-400" />
         完全ローカル実行モード: 入力された名簿データや個人情報はサーバーへ送信・保存されません
@@ -289,9 +322,33 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 pt-8 grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Sidebar Controls */}
         <aside className="lg:col-span-1 flex flex-col gap-6 no-print">
-          {/* Data Import */}
+          {/* Google Sheets DB Integration */}
+          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
+            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Database size={16} className="text-emerald-500" /> スプレッドシート連携
+            </h2>
+            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 mb-4 text-[10px] text-emerald-700 font-medium leading-relaxed">
+              Googleスプレッドシートをデータベースとして活用します。「共有」から「リンクを知っている全員」に閲覧権限を与えてください。
+            </div>
+            <div className="space-y-3">
+              <input 
+                type="text" 
+                placeholder="スプレッドシートのURLまたはID" 
+                value={sheetUrl}
+                onChange={(e) => setSheetUrl(e.target.value)}
+                className="w-full px-4 py-3 text-xs border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
+              />
+              <button 
+                onClick={handleFetchFromSheet}
+                disabled={isProcessing}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Globe size={14} /> データを読み込む
+              </button>
+            </div>
+          </section>
+
           <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 p-3 opacity-[0.03]">
               <EyeOff size={80} />
@@ -313,7 +370,6 @@ const App: React.FC = () => {
             </label>
           </section>
 
-          {/* AI Advisor */}
           <section className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-3xl text-white shadow-xl shadow-indigo-100 relative overflow-hidden group">
             <Sparkles className="absolute -bottom-2 -right-2 text-indigo-400/20 group-hover:scale-110 transition-transform" size={100} />
             <div className="relative z-10">
@@ -339,7 +395,6 @@ const App: React.FC = () => {
             </div>
           </section>
 
-          {/* Manual Swap */}
           <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <ArrowLeftRight size={16} className="text-indigo-500" /> 手動ピンポイント移動
@@ -366,10 +421,8 @@ const App: React.FC = () => {
           </section>
         </aside>
 
-        {/* Seating Grid Area */}
         <section className="lg:col-span-3">
           <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-xl overflow-x-auto relative">
-            {/* Loading Overlay */}
             {isProcessing && (
               <div className="absolute inset-0 bg-white/70 backdrop-blur-[4px] z-50 flex items-center justify-center rounded-[3rem]">
                 <div className="flex flex-col items-center gap-4">
@@ -377,12 +430,11 @@ const App: React.FC = () => {
                       <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                       <ShieldCheck className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600" size={24} />
                    </div>
-                   <p className="text-sm font-black text-indigo-700 tracking-widest animate-pulse">セキュア・シャッフル実行中...</p>
+                   <p className="text-sm font-black text-indigo-700 tracking-widest animate-pulse">処理中...</p>
                 </div>
               </div>
             )}
             
-            {/* Classroom Layout Header - Desk at Bottom means Grid Top is "Back" */}
             <div className="mb-8 flex items-center justify-center gap-4">
               <div className="h-[1px] flex-1 bg-slate-100"></div>
               <div className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">教室後方 (BACK)</div>
@@ -406,7 +458,6 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Teacher's Desk at Bottom (FRONT) */}
             <div className="mt-14 mb-4 text-center">
               <div className="relative inline-block px-24 py-5 bg-slate-900 rounded-3xl text-white font-black uppercase tracking-[0.4em] text-sm shadow-2xl border-4 border-slate-800">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-700 px-3 py-1 rounded-full text-[8px] font-bold text-slate-300">TEACHER</div>
@@ -414,7 +465,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Legend & Stats */}
             <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6 no-print">
               <div className="flex flex-wrap items-center gap-5">
                 <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600/60 bg-indigo-50 px-4 py-2 rounded-2xl border border-indigo-100/50 shadow-sm uppercase tracking-wider">
@@ -433,7 +483,6 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Export Actions */}
           <div className="mt-8 flex gap-4 no-print">
             <button 
               onClick={exportExcel}

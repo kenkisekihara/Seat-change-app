@@ -50,6 +50,11 @@ const App: React.FC = () => {
   }, [initializeSeats]);
 
   const handleShuffle = () => {
+    if (students.length === 0) {
+      alert("名簿をインポートしてから実行してください。");
+      return;
+    }
+
     setIsProcessing(true);
     setTimeout(() => {
       const targetIndices = seats.reduce((acc, seat, idx) => {
@@ -83,7 +88,7 @@ const App: React.FC = () => {
       setSeats(newSeats);
       setSelectedSeatIndex(null);
       setIsProcessing(false);
-    }, 400); // セキュアな処理感を出すための僅かな遅延
+    }, 400); 
   };
 
   const handleToggleLock = (index: number, e: React.MouseEvent) => {
@@ -207,7 +212,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
-      {/* セキュリティバナー */}
       <div className="bg-indigo-900 text-indigo-100 py-1.5 px-4 text-center text-[10px] font-bold tracking-widest uppercase flex items-center justify-center gap-2">
         <ShieldCheck size={12} />
         完全ローカル実行モード: アップロードされたファイルや個人情報は一切サーバーに保存されません。
@@ -225,8 +229,8 @@ const App: React.FC = () => {
           </div>
           <button 
             onClick={handleShuffle}
-            disabled={isProcessing}
-            className={`flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-100 ${isProcessing ? 'opacity-50' : ''}`}
+            disabled={isProcessing || students.length === 0}
+            className={`flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-100 ${isProcessing || students.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isProcessing ? <RefreshCcw size={16} className="animate-spin" /> : <Shuffle size={16} />}
             席替えを実行
@@ -281,7 +285,8 @@ const App: React.FC = () => {
               </div>
               <button 
                 onClick={handleManualSwap}
-                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl text-sm font-bold transition-all shadow-md active:scale-[0.98]"
+                disabled={students.length === 0}
+                className={`w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl text-sm font-bold transition-all shadow-md active:scale-[0.98] ${students.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 入れ替えを実行
               </button>
@@ -355,7 +360,8 @@ const App: React.FC = () => {
           <div className="mt-8 flex gap-4 no-print">
             <button 
               onClick={exportExcel}
-              className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black transition-all shadow-lg active:scale-[0.98]"
+              disabled={students.length === 0}
+              className={`flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black transition-all shadow-lg active:scale-[0.98] ${students.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <FileSpreadsheet size={20} /> Excelファイルをダウンロード
             </button>

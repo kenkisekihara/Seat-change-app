@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   ServerOff,
   Layout,
-  Trash2
+  Trash2,
+  Settings
 } from 'lucide-react';
 import { Student, Seat, Gender } from './types';
 import { ROWS, COLS, DEFAULT_STUDENTS } from './constants';
@@ -28,18 +29,20 @@ const App: React.FC = () => {
   const [swapIds, setSwapIds] = useState({ id1: '', id2: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [rows, setRows] = useState(ROWS);
+  const [cols, setCols] = useState(COLS);
 
   /**
    * 座席の初期化
    * 空席を教室後方（画面上部）に配置するロジック
    */
-  const initializeSeats = useCallback((studentList: Student[], resetState: boolean = false) => {
+  const initializeSeats = useCallback((studentList: Student[], currentRows: number, currentCols: number, resetState: boolean = false) => {
     setSeats(prevSeats => {
-      const totalSeatsCount = ROWS * COLS;
+      const totalSeatsCount = currentRows * currentCols;
       const newSeats: Seat[] = [];
 
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < currentRows; r++) {
+        for (let c = 0; c < currentCols; c++) {
           const existingSeat = prevSeats.find(s => s.row === r && s.col === c);
           newSeats.push({
             row: r,
@@ -68,8 +71,8 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    initializeSeats(students);
-  }, [initializeSeats]);
+    initializeSeats(students, rows, cols);
+  }, [initializeSeats, rows, cols]);
 
   const handleShuffle = () => {
     if (students.length === 0) {
@@ -203,7 +206,7 @@ const App: React.FC = () => {
         gender: ((row['性別'] === '女' || row['gender'] === 'female') ? '女' : '男') as Gender
       })).filter(s => s.id);
       setStudents(imported);
-      initializeSeats(imported);
+      initializeSeats(imported, rows, cols);
       setIsProcessing(false);
     };
     reader.readAsBinaryString(file);
@@ -238,12 +241,12 @@ const App: React.FC = () => {
   const exportExcel = () => {
     const tableData = [];
     const header = [];
-    for (let c = 0; c < COLS; c++) header.push(`${c + 1}列目`);
+    for (let c = 0; c < cols; c++) header.push(`${c + 1}列目`);
     tableData.push(header);
 
-    for (let r = 0; r < ROWS; r++) {
+    for (let r = 0; r < rows; r++) {
       const rowArr = [];
-      for (let c = 0; c < COLS; c++) {
+      for (let c = 0; c < cols; c++) {
         const seat = seats.find(s => s.row === r && s.col === c);
         if (seat?.isUnusable) {
           rowArr.push("使用不可");
@@ -257,7 +260,7 @@ const App: React.FC = () => {
     }
 
     const ws = XLSX.utils.aoa_to_sheet(tableData);
-    ws['!cols'] = Array(COLS).fill({ wch: 25 });
+    ws['!cols'] = Array(cols).fill({ wch: 25 });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "座席表");
     XLSX.writeFile(wb, "座席表_出力.xlsx");
@@ -265,7 +268,7 @@ const App: React.FC = () => {
 
   const handleClearAll = () => {
     setStudents([]);
-    initializeSeats([], true);
+    initializeSeats([], rows, cols, true);
     setSelectedSeatIndex(null);
     setSwapIds({ id1: '', id2: '' });
     setIsClearModalOpen(false);
@@ -345,6 +348,36 @@ const App: React.FC = () => {
 
           <section className="bg-white p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Settings size={16} className="text-indigo-500" /> 座席設定
+            </h2>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">縦 (行)</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max="20" 
+                  value={rows} 
+                  onChange={(e) => setRows(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-4 py-3 text-xs border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">横 (列)</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max="20" 
+                  value={cols} 
+                  onChange={(e) => setCols(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-4 py-3 text-xs border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-white p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Upload size={16} className="text-indigo-500" /> 名簿読み込み
             </h2>
             <button 
@@ -414,7 +447,10 @@ const App: React.FC = () => {
 
             {/* Seating Grid */}
             <div className="flex-1 overflow-x-auto sm:overflow-visible">
-              <div className="grid grid-cols-6 gap-2 sm:gap-6 xl:gap-8 min-w-[450px] sm:min-w-0">
+              <div 
+                className="grid gap-2 sm:gap-6 xl:gap-8 min-w-[450px] sm:min-w-0"
+                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+              >
                 {seats.map((seat, index) => (
                   <SeatCard
                     key={index}

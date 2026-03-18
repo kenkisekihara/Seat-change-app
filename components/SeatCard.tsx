@@ -46,15 +46,17 @@ const SeatCard: React.FC<SeatCardProps> = ({
       </div>
 
       <div className="absolute top-0.5 right-0.5 flex gap-0.5">
-        <button
-          onClick={onToggleUnusable}
-          className={`
-            p-0.5 sm:p-1 rounded-md transition-colors
-            ${isUnusable ? 'text-red-600 bg-red-100' : 'text-slate-300 hover:text-red-400 hover:bg-red-50'}
-          `}
-        >
-          <Ban size={10} className="sm:w-[12px] sm:h-[12px]" />
-        </button>
+        {(!student || isUnusable) && (
+          <button
+            onClick={onToggleUnusable}
+            className={`
+              p-0.5 sm:p-1 rounded-md transition-colors
+              ${isUnusable ? 'text-red-600 bg-red-100' : 'text-slate-300 hover:text-red-400 hover:bg-red-50'}
+            `}
+          >
+            <Ban size={10} className="sm:w-[12px] sm:h-[12px]" />
+          </button>
+        )}
 
         {!isUnusable && (
           <button

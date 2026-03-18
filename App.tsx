@@ -14,7 +14,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   ServerOff,
-  Layout
+  Layout,
+  Trash2
 } from 'lucide-react';
 import { Student, Seat, Gender } from './types';
 import { ROWS, COLS, DEFAULT_STUDENTS } from './constants';
@@ -26,6 +27,7 @@ const App: React.FC = () => {
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
   const [swapIds, setSwapIds] = useState({ id1: '', id2: '' });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
   /**
    * 座席の初期化
@@ -120,6 +122,12 @@ const App: React.FC = () => {
     e.stopPropagation();
     const newSeats = [...seats];
     const targetSeat = newSeats[index];
+    
+    if (!targetSeat.isUnusable && targetSeat.student) {
+      alert("人が座っている席は使用不可にできません。先に他の席へ移動させてください。");
+      return;
+    }
+
     if (!targetSeat.isUnusable) {
       targetSeat.isLocked = false;
       targetSeat.student = null;
@@ -222,6 +230,14 @@ const App: React.FC = () => {
     XLSX.writeFile(wb, "座席表_出力.xlsx");
   };
 
+  const handleClearAll = () => {
+    setStudents([]);
+    initializeSeats([]);
+    setSelectedSeatIndex(null);
+    setSwapIds({ id1: '', id2: '' });
+    setIsClearModalOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
       {/* Privacy Top Banner */}
@@ -243,14 +259,24 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          <button 
-            onClick={handleShuffle}
-            disabled={isProcessing || students.length === 0}
-            className={`flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 sm:px-14 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50 disabled:shadow-none`}
-          >
-            {isProcessing ? <RefreshCcw size={16} className="animate-spin sm:w-[18px] sm:h-[18px]" /> : <Shuffle size={16} className="sm:w-[18px] sm:h-[18px]" />}
-            席替え実行
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsClearModalOpen(true)}
+              disabled={students.length === 0}
+              className="flex items-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-600 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              <Trash2 size={16} className="sm:w-[18px] sm:h-[18px]" />
+              <span className="hidden sm:inline">すべてクリア</span>
+            </button>
+            <button 
+              onClick={handleShuffle}
+              disabled={isProcessing || students.length === 0}
+              className={`flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 sm:px-14 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50 disabled:shadow-none`}
+            >
+              {isProcessing ? <RefreshCcw size={16} className="animate-spin sm:w-[18px] sm:h-[18px]" /> : <Shuffle size={16} className="sm:w-[18px] sm:h-[18px]" />}
+              席替え実行
+            </button>
+          </div>
         </div>
       </header>
 
@@ -417,6 +443,38 @@ const App: React.FC = () => {
           </div>
         </section>
       </main>
+
+      {/* Clear All Confirmation Modal */}
+      {isClearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100">
+            <div className="p-6 sm:p-8">
+              <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-5 mx-auto">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-lg font-black text-slate-800 text-center mb-2">すべてクリアしますか？</h3>
+              <p className="text-xs text-slate-500 text-center leading-relaxed">
+                名簿データと座席の配置がすべて削除され、初期状態に戻ります。この操作は取り消せません。
+              </p>
+            </div>
+            <div className="flex border-t border-slate-100 bg-slate-50">
+              <button
+                onClick={() => setIsClearModalOpen(false)}
+                className="flex-1 py-4 text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+              >
+                キャンセル
+              </button>
+              <div className="w-[1px] bg-slate-200"></div>
+              <button
+                onClick={handleClearAll}
+                className="flex-1 py-4 text-sm font-black text-rose-600 hover:bg-rose-50 transition-colors"
+              >
+                クリアする
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

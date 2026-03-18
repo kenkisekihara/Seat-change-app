@@ -33,31 +33,38 @@ const App: React.FC = () => {
    * 座席の初期化
    * 空席を教室後方（画面上部）に配置するロジック
    */
-  const initializeSeats = useCallback((studentList: Student[]) => {
-    const totalSeatsCount = ROWS * COLS;
-    const newSeats: Seat[] = [];
+  const initializeSeats = useCallback((studentList: Student[], resetState: boolean = false) => {
+    setSeats(prevSeats => {
+      const totalSeatsCount = ROWS * COLS;
+      const newSeats: Seat[] = [];
 
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        newSeats.push({
-          row: r,
-          col: c,
-          student: null,
-          isLocked: false,
-          isUnusable: false
-        });
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const existingSeat = prevSeats.find(s => s.row === r && s.col === c);
+          newSeats.push({
+            row: r,
+            col: c,
+            student: null,
+            isLocked: resetState ? false : (existingSeat ? existingSeat.isLocked : false),
+            isUnusable: resetState ? false : (existingSeat ? existingSeat.isUnusable : false)
+          });
+        }
       }
-    }
 
-    const reversedIndices = Array.from({ length: totalSeatsCount }, (_, i) => i).reverse();
-    
-    studentList.forEach((student, i) => {
-      if (i < totalSeatsCount) {
-        newSeats[reversedIndices[i]].student = student;
-      }
+      const availableIndices = newSeats
+        .map((seat, index) => ({ seat, index }))
+        .filter(({ seat }) => !seat.isUnusable)
+        .map(({ index }) => index)
+        .reverse();
+      
+      studentList.forEach((student, i) => {
+        if (i < availableIndices.length) {
+          newSeats[availableIndices[i]].student = student;
+        }
+      });
+
+      return newSeats;
     });
-
-    setSeats(newSeats);
   }, []);
 
   useEffect(() => {
@@ -179,9 +186,9 @@ const App: React.FC = () => {
     XLSX.writeFile(wb, "名簿テンプレート.xlsx");
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [isDragging, setIsDragging] = useState(false);
+
+  const processFile = (file: File) => {
     setIsProcessing(true);
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -200,6 +207,32 @@ const App: React.FC = () => {
       setIsProcessing(false);
     };
     reader.readAsBinaryString(file);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processFile(file);
+    }
   };
 
   const exportExcel = () => {
@@ -232,7 +265,7 @@ const App: React.FC = () => {
 
   const handleClearAll = () => {
     setStudents([]);
-    initializeSeats([]);
+    initializeSeats([], true);
     setSelectedSeatIndex(null);
     setSwapIds({ id1: '', id2: '' });
     setIsClearModalOpen(false);
@@ -320,9 +353,16 @@ const App: React.FC = () => {
             >
               <FileDown size={14} /> テンプレートDL
             </button>
-            <label className="flex flex-col items-center justify-center w-full h-32 sm:h-40 border-2 border-dashed border-slate-200 rounded-[1.5rem] sm:rounded-[2rem] cursor-pointer hover:bg-slate-50 transition-all hover:border-indigo-400 group">
-              <FileSpreadsheet className="text-slate-300 group-hover:text-indigo-400 mb-2 transition-colors" size={32} />
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider text-center px-4">Excel / CSV をアップロード</p>
+            <label 
+              className={`flex flex-col items-center justify-center w-full h-32 sm:h-40 border-2 border-dashed rounded-[1.5rem] sm:rounded-[2rem] cursor-pointer transition-all group
+                ${isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50 hover:border-indigo-400'}
+              `}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <FileSpreadsheet className={`${isDragging ? 'text-indigo-500' : 'text-slate-300 group-hover:text-indigo-400'} mb-2 transition-colors`} size={32} />
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider text-center px-4">Excel / CSV をアップロード<br/><span className="text-[8px] font-normal mt-1 block">またはここにドラッグ＆ドロップ</span></p>
               <input type="file" className="hidden" accept=".xlsx, .csv" onChange={handleFileUpload} />
             </label>
           </section>
